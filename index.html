@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DAKSHIN CHANDPUR CHILD DEVELOPMENT MISSION - Expense Manager</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- jsPDF & AutoTable -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <!-- SheetJS / XLSX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans antialiased">
+
+  <!-- Header Banner -->
+  <header class="bg-blue-950 text-white shadow-lg sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
+      <div class="flex items-center gap-3 text-center md:text-left">
+        <div class="w-10 h-10 bg-blue-800 rounded-full flex items-center justify-center font-bold text-lg text-white">
+          <i class="fa-solid fa-hand-holding-heart"></i>
+        </div>
+        <div>
+          <h1 class="text-base md:text-xl font-bold tracking-tight">DAKSHIN CHANDPUR CHILD DEVELOPMENT MISSION</h1>
+          <p class="text-xs text-blue-200">Daily Office Expense & Voucher Management Portal</p>
+        </div>
+      </div>
+      <div id="userStatusArea" class="flex items-center gap-2">
+        <span class="text-xs bg-blue-900 px-2.5 py-1 rounded border border-blue-700">Connecting to Server...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- Auth Card -->
+    <div id="authContainer" class="max-w-md mx-auto bg-white rounded-xl shadow-md p-6 my-10 border border-slate-200">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 bg-blue-100 text-blue-900 rounded-full flex items-center justify-center mx-auto mb-2 text-xl">
+          <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <h2 id="authTitle" class="text-lg font-bold text-slate-900">Sign In to Account</h2>
+        <p class="text-xs text-slate-500 mt-1">Admin approval is required for login access</p>
+      </div>
+
+      <form id="authForm" onsubmit="handleAuth(event)" class="space-y-4">
+        <div id="nameGroup" class="hidden">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Full Name</label>
+          <input type="text" id="authName" placeholder="Enter full name" class="w-full text-sm px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-600 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Email Address</label>
+          <input type="email" id="authEmail" required placeholder="user@dccdm.org" class="w-full text-sm px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-600 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+          <input type="password" id="authPassword" required placeholder="••••••••" class="w-full text-sm px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-600 outline-none">
+        </div>
+
+        <button type="submit" id="authSubmitBtn" class="w-full bg-blue-900 hover:bg-blue-800 text-white py-2.5 rounded-lg text-sm font-medium transition shadow">
+          Sign In
+        </button>
+      </form>
+
+      <div class="mt-4 pt-4 border-t text-center">
+        <button onclick="toggleAuthMode()" id="toggleAuthBtn" class="text-xs text-blue-700 hover:underline font-medium">
+          Don't have an account? Register
+        </button>
+      </div>
+    </div>
+
+    <!-- Pending Approval Banner -->
+    <div id="pendingContainer" class="hidden max-w-md mx-auto bg-amber-50 border border-amber-200 rounded-xl p-6 text-center my-10 shadow-sm">
+      <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+      </div>
+      <h2 class="text-base font-bold text-amber-900">Account Pending Approval</h2>
+      <p id="pendingText" class="text-xs text-amber-800 mt-2 leading-relaxed">
+        Your registration is complete! An Administrator of <strong>DAKSHIN CHANDPUR CHILD DEVELOPMENT MISSION</strong> must approve your account before you can log in.
+      </p>
+      <button onclick="logout()" class="mt-5 text-xs bg-white text-amber-900 px-4 py-2 rounded-lg border border-amber-300 font-medium hover:bg-amber-100">
+        Sign Out
+      </button>
+    </div>
+
+    <!-- Dashboard Main Area -->
+    <div id="appDashboard" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left Column: New Voucher Form -->
+      <div class="lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex items-center justify-between border-b pb-3 mb-4">
+          <h2 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+            <i class="fa-solid fa-receipt text-blue-900"></i> New Voucher Entry
+          </h2>
+          <span id="nextVoucherIdBadge" class="text-xs bg-blue-50 text-blue-900 font-mono px-2 py-1 rounded border border-blue-200">
+            DCCDM-2026-0001
+          </span>
+        </div>
+
+        <form id="expenseForm" onsubmit="saveExpense(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Expense Date</label>
+            <input type="date" id="expenseDate" required class="w-full text-xs p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Amount (BDT)</label>
+            <input type="number" step="0.01" id="expenseAmount" required placeholder="0.00" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-slate-900">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Category (খাত)</label>
+            <select id="expenseCategory" required class="w-full text-xs p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+              <option value="Office Supplies">Office Supplies (কাগজ, কলম, ষ্টেশনরী)</option>
+              <option value="Travel & Transport">Travel & Transport (যাতায়াত খরচ)</option>
+              <option value="Food & Refreshment">Food & Refreshment (আপ্যায়ন)</option>
+              <option value="Utility Bills">Utility Bills (বিদ্যুৎ, ইন্টারনেট)</option>
+              <option value="Maintenance">Maintenance (মেরামত)</option>
+              <option value="Events & Programs">Events & Programs (অনুষ্ঠান)</option>
+              <option value="Others">Others (অন্যান্য)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Spent By (কার দ্বারা খরচ হলো)</label>
+            <input type="text" id="spentBy" required placeholder="Staff Name" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Paid To (কাকে পেমেন্ট করা হলো)</label>
+            <input type="text" id="paidTo" required placeholder="Vendor or Person Name" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Voucher Attachment (Photo/PDF)</label>
+            <input type="file" id="attachmentFile" accept="image/*,application/pdf" class="w-full text-xs text-slate-500 border rounded-lg p-1.5 bg-slate-50">
+          </div>
+
+          <button type="submit" id="saveVoucherBtn" class="w-full bg-blue-900 hover:bg-blue-800 text-white font-medium py-2.5 rounded-lg text-xs transition shadow flex items-center justify-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i> Save Expense Voucher
+          </button>
+        </form>
+      </div>
+
+      <!-- Right Column: Expense Logs Table -->
+      <div class="lg:col-span-8 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-3 border-b">
+          <div>
+            <h2 class="font-bold text-slate-800 text-sm">Voucher Records & Logs</h2>
+            <p class="text-xs text-slate-500">Filter, export A4 PDF vouchers or download Excel sheet</p>
+          </div>
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <button onclick="exportExcel()" class="flex-1 sm:flex-initial text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg font-medium flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-file-excel"></i> Export Excel
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <input type="text" id="searchInput" oninput="renderTable()" placeholder="Search by Voucher ID, Staff, or Vendor..." class="text-xs p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-600">
+          <select id="filterCategory" onchange="renderTable()" class="text-xs p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+            <option value="ALL">All Categories</option>
+            <option value="Office Supplies">Office Supplies</option>
+            <option value="Travel & Transport">Travel & Transport</option>
+            <option value="Food & Refreshment">Food & Refreshment</option>
+            <option value="Utility Bills">Utility Bills</option>
+            <option value="Maintenance">Maintenance</option>
+            <option value="Events & Programs">Events & Programs</option>
+            <option value="Others">Others</option>
+          </select>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 border-b">
+                <th class="p-2.5 font-semibold">Voucher ID</th>
+                <th class="p-2.5 font-semibold">Date</th>
+                <th class="p-2.5 font-semibold">Category</th>
+                <th class="p-2.5 font-semibold">Spent By</th>
+                <th class="p-2.5 font-semibold">Paid To</th>
+                <th class="p-2.5 font-semibold text-right">Amount (BDT)</th>
+                <th class="p-2.5 font-semibold text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="expenseTableBody" class="divide-y divide-slate-100">
+              <!-- Dynamic rows -->
+            </tbody>
+            <tfoot>
+              <tr class="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
+                <td colspan="5" class="p-2.5 text-right">Total Filtered Expense:</td>
+                <td id="totalAmountCell" class="p-2.5 text-right text-blue-900">0.00</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- JavaScript Section -->
+  <script>
+    // ============================================================
+    // 1. SUPABASE CONFIGURATION
+    // ============================================================
+    const SUPABASE_URL = 'https://vtzcwmqiyuqmzgwctuut.supabase.co';
+    const SUPABASE_ANON_KEY = 	'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0emN3bXFpeXVxbXpnd2N0dXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMDA3NTAsImV4cCI6MjEwMTc3Njc1MH0.VC8xy-Rfxva1oY8vW4WXpE1YSPspx2aYdh110SZiE2k'; //
+
+    const _supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+    // State Variables
+    let isRegisterMode = false;
+    let currentUser = null;
+    let userProfile = null;
+    let expenses = [];
+
+    document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+
+    // Initialize Auth state listener
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (_supabase) {
+        const { data: { session } } = await _supabase.auth.getSession();
+        if (session) {
+          await handleUserSession(session.user);
+        } else {
+          updateUI();
+        }
+
+        _supabase.auth.onAuthStateChange(async (event, session) => {
+          if (session) {
+            await handleUserSession(session.user);
+          } else {
+            currentUser = null;
+            userProfile = null;
+            expenses = [];
+            updateUI();
+          }
+        });
+      } else {
+        updateUI();
+      }
+    });
+
+    async function handleUserSession(user) {
+      currentUser = user;
+      // Fetch user profile status
+      const { data, error } = await _supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (data) {
+        userProfile = data;
+      } else {
+        userProfile = { email: user.email, full_name: user.email, is_approved: false };
+      }
+
+      if (userProfile && userProfile.is_approved) {
+        await loadExpensesFromSupabase();
+      }
+      updateUI();
+    }
+
+    async function loadExpensesFromSupabase() {
+      if (!_supabase) return;
+      const { data, error } = await _supabase
+        .from('expenses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (data) {
+        expenses = data;
+      }
+    }
+
+    function updateUI() {
+      const authContainer = document.getElementById('authContainer');
+      const pendingContainer = document.getElementById('pendingContainer');
+      const appDashboard = document.getElementById('appDashboard');
+      const userStatusArea = document.getElementById('userStatusArea');
+
+      if (!currentUser) {
+        authContainer.classList.remove('hidden');
+        pendingContainer.classList.add('hidden');
+        appDashboard.classList.add('hidden');
+        userStatusArea.innerHTML = `<span class="text-xs bg-blue-900 px-2.5 py-1 rounded border border-blue-700">Not Logged In</span>`;
+      } else if (userProfile && !userProfile.is_approved) {
+        authContainer.classList.add('hidden');
+        pendingContainer.classList.remove('hidden');
+        appDashboard.classList.add('hidden');
+        document.getElementById('pendingText').innerHTML = `
+          Account Registered (${currentUser.email})! An Administrator of <strong>DAKSHIN CHANDPUR CHILD DEVELOPMENT MISSION</strong> must set <code>is_approved = TRUE</code> in Supabase before you can access.
+        `;
+        userStatusArea.innerHTML = `<span class="text-xs bg-amber-600 px-2.5 py-1 rounded text-white font-medium">Pending Approval</span>`;
+      } else {
+        authContainer.classList.add('hidden');
+        pendingContainer.classList.add('hidden');
+        appDashboard.classList.remove('hidden');
+        userStatusArea.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="text-xs bg-blue-900 px-2.5 py-1 rounded border border-blue-700 font-medium">
+              <i class="fa-solid fa-user-check text-emerald-400 mr-1"></i> ${userProfile?.full_name || currentUser.email} (${userProfile?.role || 'Staff'})
+            </span>
+            <button onclick="logout()" class="text-xs bg-red-600 hover:bg-red-700 px-2.5 py-1 rounded text-white font-medium transition">
+              <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </button>
+          </div>
+        `;
+        renderTable();
+        updateNextVoucherBadge();
+      }
+    }
+
+    function toggleAuthMode() {
+      isRegisterMode = !isRegisterMode;
+      document.getElementById('authTitle').innerText = isRegisterMode ? 'Create Staff Account' : 'Sign In to Account';
+      document.getElementById('nameGroup').classList.toggle('hidden', !isRegisterMode);
+      document.getElementById('authSubmitBtn').innerText = isRegisterMode ? 'Register Account' : 'Sign In';
+      document.getElementById('toggleAuthBtn').innerText = isRegisterMode ? 'Already have an account? Login' : "Don't have an account? Register";
+    }
+
+    async function handleAuth(e) {
+      e.preventDefault();
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const fullName = document.getElementById('authName').value.trim();
+
+      if (!_supabase) {
+        alert("Supabase is not initialized. Please check keys.");
+        return;
+      }
+
+      if (isRegisterMode) {
+        const { data, error } = await _supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: fullName } }
+        });
+
+        if (error) {
+          alert("Registration Failed: " + error.message);
+        } else {
+          alert("Registration successful! Waiting for admin approval.");
+          if (data.user) {
+            await handleUserSession(data.user);
+          }
+        }
+      } else {
+        const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          alert("Login Failed: " + error.message);
+        } else {
+          await handleUserSession(data.user);
+        }
+      }
+    }
+
+    async function logout() {
+      if (_supabase) await _supabase.auth.signOut();
+      currentUser = null;
+      userProfile = null;
+      expenses = [];
+      updateUI();
+    }
+
+    function updateNextVoucherBadge() {
+      const year = new Date().getFullYear();
+      const count = expenses.length + 1;
+      document.getElementById('nextVoucherIdBadge').innerText = `DCCDM-${year}-${String(count).padStart(4, '0')}`;
+    }
+
+    async function saveExpense(e) {
+      e.preventDefault();
+      const expense_date = document.getElementById('expenseDate').value;
+      const amount = parseFloat(document.getElementById('expenseAmount').value);
+      const category = document.getElementById('expenseCategory').value;
+      const spent_by = document.getElementById('spentBy').value.trim();
+      const paid_to = document.getElementById('paidTo').value.trim();
+      const fileInput = document.getElementById('attachmentFile');
+
+      let attachment_url = null;
+
+      if (fileInput.files.length > 0 && _supabase) {
+        const file = fileInput.files[0];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadErr } = await _supabase.storage.from('vouchers').upload(fileName, file);
+        if (!uploadErr) {
+          const { data: urlData } = _supabase.storage.from('vouchers').getPublicUrl(fileName);
+          attachment_url = urlData.publicUrl;
+        }
+      }
+
+      if (_supabase && currentUser) {
+        const { data, error } = await _supabase.from('expenses').insert([{
+          expense_date,
+          amount,
+          category,
+          spent_by,
+          paid_to,
+          attachment_url,
+          created_by: currentUser.id
+        }]);
+
+        if (error) {
+          alert("Error saving voucher: " + error.message);
+          return;
+        }
+      }
+
+      alert('Voucher Saved Successfully!');
+      document.getElementById('expenseForm').reset();
+      document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+      await loadExpensesFromSupabase();
+      renderTable();
+      updateNextVoucherBadge();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('expenseTableBody');
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const catFilter = document.getElementById('filterCategory').value;
+
+      tbody.innerHTML = '';
+      let total = 0;
+
+      const filtered = expenses.filter(item => {
+        const matchesSearch = (item.voucher_id || '').toLowerCase().includes(search) ||
+                              (item.spent_by || '').toLowerCase().includes(search) ||
+                              (item.paid_to || '').toLowerCase().includes(search);
+        const matchesCat = (catFilter === 'ALL') || (item.category === catFilter);
+        return matchesSearch && matchesCat;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-slate-400">No voucher entries found.</td></tr>`;
+      } else {
+        filtered.forEach(item => {
+          total += Number(item.amount);
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50 transition';
+          tr.innerHTML = `
+            <td class="p-2.5 font-mono font-bold text-blue-900">${item.voucher_id || 'N/A'}</td>
+            <td class="p-2.5">${item.expense_date}</td>
+            <td class="p-2.5"><span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-medium border">${item.category}</span></td>
+            <td class="p-2.5">${item.spent_by}</td>
+            <td class="p-2.5">${item.paid_to}</td>
+            <td class="p-2.5 text-right font-semibold">${Number(item.amount).toFixed(2)}</td>
+            <td class="p-2.5 text-center">
+              <div class="flex items-center justify-center gap-1.5">
+                <button onclick="exportSinglePDF('${item.voucher_id}')" title="Print A4 PDF" class="p-1.5 bg-blue-50 text-blue-800 hover:bg-blue-100 rounded transition">
+                  <i class="fa-solid fa-file-pdf"></i>
+                </button>
+                ${item.attachment_url ? `<a href="${item.attachment_url}" target="_blank" title="View Attachment" class="p-1.5 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100"><i class="fa-solid fa-paperclip"></i></a>` : ''}
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      document.getElementById('totalAmountCell').innerText = total.toFixed(2) + ' /-';
+    }
+
+    function exportSinglePDF(voucherId) {
+      const item = expenses.find(e => e.voucher_id === voucherId);
+      if (!item) return;
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('p', 'mm', 'a4');
+
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 58, 138);
+      doc.text('DAKSHIN CHANDPUR CHILD DEVELOPMENT MISSION', 105, 18, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(75, 85, 99);
+      doc.text('PAYMENT VOUCHER', 105, 25, { align: 'center' });
+      doc.setLineWidth(0.5);
+      doc.setDrawColor(30, 58, 138);
+      doc.line(15, 28, 195, 28);
+
+      doc.setFontSize(9.5);
+      doc.setTextColor(31, 41, 55);
+      doc.text(`Voucher ID: ${item.voucher_id}`, 15, 38);
+      doc.text(`Date: ${item.expense_date}`, 145, 38);
+      doc.text(`Spent By: ${item.spent_by}`, 15, 45);
+      doc.text(`Paid To: ${item.paid_to}`, 145, 45);
+
+      doc.autoTable({
+        startY: 52,
+        head: [['Category', 'Description / Receiver', 'Amount (BDT)']],
+        body: [[item.category, item.paid_to, `${Number(item.amount).toFixed(2)} /-`]],
+        headStyles: { fillColor: [30, 58, 138], textColor: [255, 255, 255], fontStyle: 'bold' },
+        theme: 'grid',
+        styles: { fontSize: 9.5, cellPadding: 4 }
+      });
+
+      const finalY = doc.lastAutoTable.finalY + 35;
+      doc.setDrawColor(156, 163, 175);
+      doc.line(15, finalY, 65, finalY);
+      doc.text('Spent By Signature', 20, finalY + 5);
+
+      doc.line(145, finalY, 195, finalY);
+      doc.text('Authorized Approval', 150, finalY + 5);
+
+      doc.save(`${item.voucher_id}.pdf`);
+    }
+
+    function exportExcel() {
+      const dataToExport = expenses.map(e => ({
+        'Voucher ID': e.voucher_id,
+        'Date': e.expense_date,
+        'Category': e.category,
+        'Spent By': e.spent_by,
+        'Paid To': e.paid_to,
+        'Amount (BDT)': e.amount,
+        'Attachment URL': e.attachment_url || 'None'
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Expenses");
+      XLSX.writeFile(wb, "DCCDM_Expense_Register.xlsx");
+    }
+  </script>
+</body>
+</html>
